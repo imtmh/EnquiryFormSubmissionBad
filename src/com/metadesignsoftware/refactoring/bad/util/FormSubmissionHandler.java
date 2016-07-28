@@ -177,6 +177,7 @@ public class FormSubmissionHandler {
 		String messageFooter = "</div></body></html>";
 		String message = messageHeader + emailBody + messageFooter;
 		sendEmail(from, to,subject, message,attachment);
+		return message;
 	}
 	private class SMTPAuthenticator extends javax.mail.Authenticator {
         public PasswordAuthentication getPasswordAuthentication() {
