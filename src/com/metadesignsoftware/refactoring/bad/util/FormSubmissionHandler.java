@@ -52,130 +52,15 @@ public class FormSubmissionHandler {
 		switch(_POST.get("ajaxBusiness")){
 			case "contactForm":
 			case "ctaForm":
-				String firstName =_POST.get("first_name"); 
-				if ( firstName != null && firstName.length() >20){
-					formSubmissionResult.error.add("FirstName length > 20!")  ;
-				}
-				String lastName =_POST.get("last_name");
-				if (lastName != null && lastName.length() > 20){
-					formSubmissionResult.error.add("LastName length > 20!")  ;
-				}
-				String email = _POST.get("email");
-				if (email!=null && email.length()>50){
-					formSubmissionResult.error.add("Email length > 50!")  ;
-				}
-
-				String phone = _POST.get("phone");
-				if (phone != null && phone.length() >20){
-					formSubmissionResult.error.add("Phone length > 20!")  ;
-				}
-				String company = _POST.get("company");
-				if (company != null && company.length() >40){
-					formSubmissionResult.error.add("Company length > 40!")  ;
-				}
-				String role = _POST.get(SalesForceParams.get("fieldRoleId"));
-				if (role!= null && role.length()>100){
-					formSubmissionResult.error.add("Role length > 100!")  ;
-				}
+				formSubmissionResult.error = FormSubmissionUtility.validateForm(_POST);
 				if (formSubmissionResult.error == null){
-					Map<String,String> postData = new HashMap<String,String>(_POST);
-					postData.put("debug", "1");
-					//$postData['debugEmail'] = $magnetEmails['debug'];
-					postData.remove("ajaxBusiness");
-					
-					//func_print_r($postData);
-					String attachment = null;
-					if (_POST.get("ajaxBusiness").equals("ctaForm")){
-						postData.put((String)SalesForceParams.get("fieldTalkToUsId"),(String)_POST.get("form_type")) ;
-						postData.put((String)SalesForceParams.get("fieldProductInterestedIn"),(String)_POST.get("product_interested_in")) ;
-						postData.put((String)SalesForceParams.get("fieldRoleId"),(String)_POST.get("role")) ;
-						attachment = postData.get("attach");
-					}
-				
-					boolean emailTo1 = false, emailTo2 = false;
-					
-					if (postData.get((String)SalesForceParams.get("fieldTalkToUsId")) != null ){
-						if (postData.get(SalesForceParams.get("fieldTalkToUsId")).equals("Get a test drive") || postData.get(SalesForceParams.get("fieldTalkToUsId")).equals("Get a quote")){
-							emailTo1 = true;
-						}
-						if (postData.get(SalesForceParams.get("fieldTalkToUsId")).equals("Get a meeting")){
-							emailTo2 = true;
-						}
-					}
-
-					String result = postCurlContent((String)SalesForceParams.get("urlPost"),postData);
-					formSubmissionResult.success = result;
-					// send email to sales, bizdev and debug
-					String mailBody = result;
-					String subject = "Contact Form";
-					if(postData.get((String)SalesForceParams.get("fieldTalkToUsId")) != null){
-						subject = subject + " " +postData.get((String)SalesForceParams.get("fieldTalkToUsId"));
-					}
-					subject = subject + "Company " + Configuration.getValueOf("deploymentType");
-
-					String billFile = null; 
-					if (((String)postData.get("form_type")).equals("Health Check")){
-						if (postData.get("bill") != null){
-							billFile = (String)postData.get("bill");
-						}
-					}
-					String from = CompanyEmails.get("from");
-
-					int recipientCount = 0;
-					if (emailTo1 && emailTo2){
-						recipientCount =2;
-					}else 
-						recipientCount =1;
-					String to[] = new String[recipientCount];
-					int emailIndex = 0;
-					if (emailTo1)
-						to[emailIndex++] = CompanyEmails.get("business");
-					if (emailTo2)
-						to[emailIndex++] = CompanyEmails.get("sales");
-					if (emailIndex == 0)
-						to[emailIndex++] = CompanyEmails.get("sales");
-						
-					
-					// send email to sales, debug and bizdev
-					String emailBody = result;
-					sendEmail(from, to,subject, emailBody,billFile);
-					
-					// send reply back to consumer.
-					// from remains the same
-					// to is picked up from form
-					to = new String[1];
-					to[0] = _POST.get("email");
-					String emailTemplateFile = Configuration.getValueOf("templateDirectory")+ _POST.get("emailTemplate");
-					String emailTemplate;
-					try {
-						emailTemplate = Files.toString(new File(emailTemplateFile), Charsets.UTF_8);
-					} catch (IOException e) {
-						emailTemplateFile = Configuration.getValueOf("templateDirectory")+ "/default.html";
-						try {
-							emailTemplate = Files.toString(new File(emailTemplateFile), Charsets.UTF_8);
-						} catch (IOException e1) {
-							return "could not find default template";
-						}
-					}
-					emailBody = emailTemplate.replaceAll("\\{EmailMeName\\}", firstName+" "+ lastName);
-					String messageHeader = "<html>" +
-							"<head>" +
-							"<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />" +
-							"<title>Email Me</title>" +
-							"</head>" +
-							"<body>" +
-							"<div style='font-size: 13px; font-family: arial, helvetica, sans-serif;'>"+"\n";
-					String messageFooter = "</div></body></html>";
-					String message = messageHeader + emailBody + messageFooter;
-					sendEmail(from, to,subject, message,attachment);
-					
+					methodExtraction(_POST, formSubmissionResult);
 				}
 				break;
 			case "eventReg":
 				formSubmissionResult.error=FormSubmissionUtility.validateForm(_POST);
 				
 				String result = postCurlContent((String)SalesForceParams.get("urlPost"),_POST);
-				String eventName = _POST.get(SalesForceParams.get("event_name"));
 				String from = CompanyEmails.get("from");				
 				String to[] = new String[1];
 				to[0] = CompanyEmails.get("sales");
@@ -198,6 +83,100 @@ public class FormSubmissionHandler {
 		return toJSONString(formSubmissionResult);
 
 		
+	}
+
+
+	private String methodExtraction(Map<String, String> _POST, FormSubmissionResult formSubmissionResult) {
+		Map<String,String> postData = new HashMap<String,String>(_POST);
+		postData.put("debug", "1");
+		//$postData['debugEmail'] = $magnetEmails['debug'];
+		postData.remove("ajaxBusiness");
+		
+		//func_print_r($postData);
+		String attachment = null;
+		if (_POST.get("ajaxBusiness").equals("ctaForm")){
+			postData.put((String)SalesForceParams.get("fieldTalkToUsId"),(String)_POST.get("form_type")) ;
+			postData.put((String)SalesForceParams.get("fieldProductInterestedIn"),(String)_POST.get("product_interested_in")) ;
+			postData.put((String)SalesForceParams.get("fieldRoleId"),(String)_POST.get("role")) ;
+			attachment = postData.get("attach");
+		}
+
+		boolean emailTo1 = false, emailTo2 = false;
+		
+		if (postData.get((String)SalesForceParams.get("fieldTalkToUsId")) != null ){
+			if (postData.get(SalesForceParams.get("fieldTalkToUsId")).equals("Get a test drive") || postData.get(SalesForceParams.get("fieldTalkToUsId")).equals("Get a quote")){
+				emailTo1 = true;
+			}
+			if (postData.get(SalesForceParams.get("fieldTalkToUsId")).equals("Get a meeting")){
+				emailTo2 = true;
+			}
+		}
+
+		String result = postCurlContent((String)SalesForceParams.get("urlPost"),postData);
+		formSubmissionResult.success = result;
+		// send email to sales, bizdev and debug
+		String mailBody = result;
+		String subject = "Contact Form";
+		if(postData.get((String)SalesForceParams.get("fieldTalkToUsId")) != null){
+			subject = subject + " " +postData.get((String)SalesForceParams.get("fieldTalkToUsId"));
+		}
+		subject = subject + "Company " + Configuration.getValueOf("deploymentType");
+
+		String billFile = null; 
+		if (((String)postData.get("form_type")).equals("Health Check")){
+			if (postData.get("bill") != null){
+				billFile = (String)postData.get("bill");
+			}
+		}
+		String from = CompanyEmails.get("from");
+
+		int recipientCount = 0;
+		if (emailTo1 && emailTo2){
+			recipientCount =2;
+		}else 
+			recipientCount =1;
+		String to[] = new String[recipientCount];
+		int emailIndex = 0;
+		if (emailTo1)
+			to[emailIndex++] = CompanyEmails.get("business");
+		if (emailTo2)
+			to[emailIndex++] = CompanyEmails.get("sales");
+		if (emailIndex == 0)
+			to[emailIndex++] = CompanyEmails.get("sales");
+			
+		
+		// send email to sales, debug and bizdev
+		String emailBody = result;
+		sendEmail(from, to,subject, emailBody,billFile);
+		
+		// send reply back to consumer.
+		// from remains the same
+		// to is picked up from form
+		to = new String[1];
+		to[0] = _POST.get("email");
+		String emailTemplateFile = Configuration.getValueOf("templateDirectory")+ _POST.get("emailTemplate");
+		String emailTemplate;
+		try {
+			emailTemplate = Files.toString(new File(emailTemplateFile), Charsets.UTF_8);
+		} catch (IOException e) {
+			emailTemplateFile = Configuration.getValueOf("templateDirectory")+ "/default.html";
+			try {
+				emailTemplate = Files.toString(new File(emailTemplateFile), Charsets.UTF_8);
+			} catch (IOException e1) {
+				return "could not find default template";
+			}
+		}
+		emailBody = emailTemplate.replaceAll("\\{EmailMeName\\}", _POST.get("fistName")+" "+ _POST.get("lastName"));
+		String messageHeader = "<html>" +
+				"<head>" +
+				"<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />" +
+				"<title>Email Me</title>" +
+				"</head>" +
+				"<body>" +
+				"<div style='font-size: 13px; font-family: arial, helvetica, sans-serif;'>"+"\n";
+		String messageFooter = "</div></body></html>";
+		String message = messageHeader + emailBody + messageFooter;
+		sendEmail(from, to,subject, message,attachment);
 	}
 	private class SMTPAuthenticator extends javax.mail.Authenticator {
         public PasswordAuthentication getPasswordAuthentication() {
